@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Nave Espacial 3D</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      background-color: #000;
+      touch-action: none;
+      font-family: sans-serif;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    /* Controles táctiles */
+    #joystick-zone {
+      position: absolute;
+      bottom: 30px;
+      left: 30px;
+      width: 120px;
+      height: 120px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      touch-action: none;
+    }
+    #joystick-knob {
+      position: absolute;
+      top: 35px;
+      left: 35px;
+      width: 50px;
+      height: 50px;
+      background: rgba(0, 225, 255, 0.6);
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgba(0, 225, 255, 0.8);
+    }
+    #ui-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #00e1ff;
+      font-size: 16px;
+      text-shadow: 0 0 5px #00e1ff;
+      pointer-events: none;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div id="ui-overlay">
+    <h2>EXPLORADOR ESPACIAL 3D</h2>
+    <p>Usa el joystick para pilotar la nave</p>
+  </div>
+
+  <div id="joystick-zone">
+    <div id="joystick-knob"></div>
+  </div>
+
+  <script>
+    // 1. Configurar Escena, Cámara y Renderizador
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000005, 0.002);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    // 2. Iluminación
+    const ambientLight = new THREE.AmbientLight(0x333344, 2);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    dirLight.position.set(10, 20, 10);
+    scene.add(dirLight);
+
+    // 3. Crear Estrellas de Fondo
+    const starsGeo = new THREE.BufferGeometry();
+    const starsCount = 2000;
+    const starPos = new Float32Array(starsCount * 3);
+
+    for (let i = 0; i < starsCount * 3; i += 3) {
+      starPos[i] = (Math.random() - 0.5) * 800;
+      starPos[i+1] = (Math.random() - 0.5) * 800;
+      starPos[i+2] = (Math.random() - 0.5) * 800;
+    }
+    starsGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.8 });
+    const starField = new THREE.Points(starsGeo, starsMat);
+    scene.add(starField);
+
+    // 4. Crear Nave Espacial
+    const shipGroup = new THREE.Group();
+
+    // Cuerpo principal
+    const bodyGeo = new THREE.ConeGeometry(0.8, 3, 5);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x00aaff, roughness: 0.3, metalness: 0.8 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.rotation.x = Math.PI / 2;
+    shipGroup.add(body);
+
+    // Alas
+    const wingGeo = new THREE.BoxGeometry(3, 0.1, 1);
+    const wingMat = new THREE.MeshStandardMaterial({ color: 0xff0055, roughness: 0.5 });
+    const wings = new THREE.Mesh(wingGeo, wingMat);
+    wings.position.set(0, 0, 0.5);
+    shipGroup.add(wings);
+
+    // Motor (Luz trasera)
+    const engineGeo = new THREE.SphereGeometry(0.3, 8, 8);
+    const engineMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const engine = new THREE.Mesh(engineGeo, engineMat);
+    engine.position.set(0, 0, 1.5);
+    shipGroup.add(engine);
+
+    scene.add(shipGroup);
+
+    // 5. Crear Asteroides
+    const asteroids = [];
+    const astGeo = new THREE.DodecahedronGeometry(2, 1);
+    const astMat = new THREE.MeshStandardMaterial({ color: 0x666677, roughness: 0.9 });
+
+    for (let i = 0; i < 40; i++) {
+      const ast = new THREE.Mesh(astGeo, astMat);
+      ast.position.set(
+        (Math.random() - 0.5) * 200,
+        (Math.random() - 0.5) * 200,
+        (Math.random() - 0.5) * 200
+      );
+      const scale = 0.5 + Math.random() * 1.5;
+      ast.scale.set(scale, scale, scale);
+      scene.add(ast);
+      asteroids.push(ast);
+    }
+
+    // 6. Lógica del Joystick Táctil
+    const zone = document.getElementById('joystick-zone');
+    const knob = document.getElementById('joystick-knob');
+    let moveX = 0;
+    let moveY = 0;
+    let touching = false;
+    let baseRect = zone.getBoundingClientRect();
+
+    function updateBaseRect() {
+      baseRect = zone.getBoundingClientRect();
+    }
+    window.addEventListener('resize', updateBaseRect);
+
+    zone.addEventListener('touchstart', (e) => {
+      touching = true;
+      handleTouch(e.touches[0]);
+    }, { passive: false });
+
+    zone.addEventListener('touchmove', (e) => {
+      if (touching) {
+        e.preventDefault();
+        handleTouch(e.touches[0]);
+      }
+    }, { passive: false });
+
+    zone.addEventListener('touchend', () => {
+      touching = false;
+      moveX = 0;
+      moveY = 0;
+      knob.style.left = '35px';
+      knob.style.top = '35px';
+    });
+
+    function handleTouch(touch) {
+      const centerX = baseRect.left + baseRect.width / 2;
+      const centerY = baseRect.top + baseRect.height / 2;
+      
+      let dx = touch.clientX - centerX;
+      let dy = touch.clientY - centerY;
+      
+      const maxRadius = 35;
+      const distance = Math.hypot(dx, dy);
+      
+      if (distance > maxRadius) {
+        dx = (dx / distance) * maxRadius;
+        dy = (dy / distance) * maxRadius;
+      }
+
+      knob.style.left = `${35 + dx}px`;
+      knob.style.top = `${35 + dy}px`;
+
+      moveX = dx / maxRadius;
+      moveY = dy / maxRadius;
+    }
+
+    // 7. Bucle de Animación / Juego
+    let shipSpeed = 0.4;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Rotación y movimiento de la nave según el joystick
+      shipGroup.rotation.z = -moveX * 0.5;
+      shipGroup.rotation.x = moveY * 0.5;
+
+      shipGroup.position.x += moveX * 0.5;
+      shipGroup.position.y -= moveY * 0.5;
+
+      // Avanzar nave hacia adelante siempre
+      shipGroup.position.z -= shipSpeed;
+
+      // Hacer que la cámara siga a la nave libremente
+      camera.position.x = shipGroup.position.x;
+      camera.position.y = shipGroup.position.y + 2;
+      camera.position.z = shipGroup.position.z + 10;
+      camera.lookAt(shipGroup.position.x, shipGroup.position.y, shipGroup.position.z - 5);
+
+      // Rotar asteroides lentamente
+      asteroids.forEach(ast => {
+        ast.rotation.x += 0.005;
+        ast.rotation.y += 0.005;
+      });
+
+      renderer.render(scene, camera);
+    }
+
+    // Ajustar pantalla si cambia el tamaño
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+  </script>
+</body>
+</html>
