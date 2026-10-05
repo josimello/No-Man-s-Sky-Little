@@ -8,13 +8,13 @@
   "description": "Juego 3D de exploración espacial",
   "icons": [
     {
-      "src": "https://via.placeholder.com/192.png?text=NMS",
+      "src": "https://raw.githubusercontent.com/josimello/No-Man-s-Sky-Little/main/index.html",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://via.placeholder.com/512.png?text=NMS",
+      "src": "https://raw.githubusercontent.com/josimello/No-Man-s-Sky-Little/main/index.html",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
